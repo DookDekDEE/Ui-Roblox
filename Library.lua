@@ -383,9 +383,7 @@ local Library do
             end
 
             if IsMobile then
-                if Event == "MouseButton1Down" or Event == "MouseButton1Click" then 
-                    Event = "TouchTap"
-                elseif Event == "MouseButton2Down" or Event == "MouseButton2Click" then 
+                if Event == "MouseButton2Down" or Event == "MouseButton2Click" then 
                     Event = "TouchLongPress"
                 end
             end
@@ -940,10 +938,10 @@ local Library do
         end
     end
 
-    Library.IsMouseOverFrame = function(self, Frame)
+    Library.IsMouseOverFrame = function(self, Frame, Position)
         Frame = Frame.Instance
 
-        local MousePosition = Vector2New(Mouse.X, Mouse.Y)
+        local MousePosition = Position and Vector2New(Position.X, Position.Y) or Vector2New(Mouse.X, Mouse.Y)
 
         return MousePosition.X >= Frame.AbsolutePosition.X and MousePosition.X <= Frame.AbsolutePosition.X + Frame.AbsoluteSize.X 
         and MousePosition.Y >= Frame.AbsolutePosition.Y and MousePosition.Y <= Frame.AbsolutePosition.Y + Frame.AbsoluteSize.Y
@@ -2309,6 +2307,12 @@ local Library do
         end
 
         Library.Notification = function(self, Data)
+            Data = Data or { }
+            Data.Title = Data.Title or "Notification"
+            Data.Description = Data.Description or ""
+            Data.Icon = Data.Icon or "122669828593160"
+            Data.Duration = Data.Duration or 5
+
             local Items = { } do 
                 Items["Notification"] = Instances:Create("Frame", {
                     Parent = Library.NotifHolder.Instance,
@@ -6394,7 +6398,9 @@ local Library do
             Library:Connect(UserInputService.InputBegan, function(Input)
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
                     if Dropdown.IsOpen then
-                        if Library:IsMouseOverFrame(Items["OptionHolder"]) then
+                        local Position = Input.Position
+
+                        if Library:IsMouseOverFrame(Items["OptionHolder"], Position) or Library:IsMouseOverFrame(Items["RealDropdown"], Position) then
                             return
                         end
 
