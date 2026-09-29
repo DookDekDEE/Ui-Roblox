@@ -1124,7 +1124,7 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
-                if not Data.Parent2.Instance:FindFirstChild("nig") then
+                if Data.Parent2 and not Data.Parent2.Instance:FindFirstChild("nig") then
                     Items["PaletteIcon"] = Instances:Create("ImageLabel", {
                         Parent = Data.Parent2.Instance,
                         ImageColor3 = FromRGB(141, 141, 150),
@@ -1879,6 +1879,212 @@ local Library do
             end
 
             return Colorpicker, Items 
+        end
+
+        Library.CreateKeybind = function(self, Data)
+            local Keybind = {
+                Name = Data.Name or "Keybind",
+                Flag = Data.Flag,
+                Callback = Data.Callback or function() end,
+
+                Key = nil,
+                Value = "None",
+                ModeSelected = "Toggle",
+                Toggled = false,
+                Picking = false
+            }
+
+            local Modes = {"Toggle", "Hold", "Always"}
+
+            local Items = { } do
+                Items["KeyButton"] = Instances:Create("TextButton", {
+                    Parent = Data.Parent.Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    Text = "[None]",
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    TextSize = 13,
+                    AutoButtonColor = false,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, 18),
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["KeyButton"]:AddToTheme({TextColor3 = "Text"})
+            end
+
+            local KeyListItem
+
+            if Library.KeyList then
+                KeyListItem = Library.KeyList:Add("", "")
+            end
+
+            local Update = function()
+                Library.Flags[Keybind.Flag] = {
+                    Mode = Keybind.ModeSelected,
+                    Key = Keybind.Key,
+                    Toggled = Keybind.Toggled
+                }
+
+                if KeyListItem then
+                    KeyListItem:Set(Keybind.Name, Keybind.Value)
+                    KeyListItem:SetStatus(Keybind.Toggled)
+                end
+
+                Items["KeyButton"].Instance.Text = "[" .. Keybind.Value .. "]"
+            end
+
+            local GetKeyDisplay = function(KeyString)
+                local Name = tostring(KeyString)
+                Name = StringGSub(Name, "^Enum%.KeyCode%.", "")
+                Name = StringGSub(Name, "^Enum%.UserInputType%.", "")
+
+                if Name == "Backspace" then
+                    return "None"
+                end
+
+                return Keys[Name] or Name
+            end
+
+            local Fire = function()
+                if Keybind.Callback then
+                    Library:SafeCall(Keybind.Callback, Keybind.Toggled)
+                end
+            end
+
+            function Keybind:Get()
+                return Keybind.Key, Keybind.ModeSelected, Keybind.Toggled
+            end
+
+            function Keybind:SetMode(Mode)
+                if not TableFind(Modes, Mode) then
+                    return
+                end
+
+                Keybind.ModeSelected = Mode
+
+                if Mode == "Always" then
+                    Keybind.Toggled = true
+                elseif Mode == "Hold" then
+                    Keybind.Toggled = false
+                end
+
+                Update()
+                Fire()
+            end
+
+            function Keybind:Set(Key)
+                if typeof(Key) == "EnumItem" then
+                    Keybind.Key = tostring(Key)
+                    Keybind.Value = GetKeyDisplay(Keybind.Key)
+                    Update()
+                    Fire()
+                elseif type(Key) == "table" then
+                    if Key.Key then
+                        Keybind.Key = tostring(Key.Key)
+                        Keybind.Value = GetKeyDisplay(Keybind.Key)
+                    end
+
+                    if TableFind(Modes, Key.Mode) then
+                        Keybind.ModeSelected = Key.Mode
+                    end
+
+                    if Keybind.ModeSelected == "Always" then
+                        Keybind.Toggled = true
+                    end
+
+                    Update()
+                    Fire()
+                elseif type(Key) == "string" and TableFind(Modes, Key) then
+                    Keybind:SetMode(Key)
+                end
+
+                Keybind.Picking = false
+            end
+
+            function Keybind:Press(Bool)
+                if Keybind.ModeSelected == "Toggle" then
+                    Keybind.Toggled = not Keybind.Toggled
+                elseif Keybind.ModeSelected == "Hold" then
+                    Keybind.Toggled = Bool
+                elseif Keybind.ModeSelected == "Always" then
+                    Keybind.Toggled = true
+                end
+
+                Update()
+                Fire()
+            end
+
+            -- Left click: pick a key. Right click: cycle Toggle -> Hold -> Always
+            Items["KeyButton"]:Connect("MouseButton1Click", function()
+                if Keybind.Picking then
+                    return
+                end
+
+                Keybind.Picking = true
+                Items["KeyButton"].Instance.Text = "[...]"
+
+                local InputBegan
+                InputBegan = UserInputService.InputBegan:Connect(function(Input)
+                    if Input.UserInputType == Enum.UserInputType.Keyboard then
+                        Keybind:Set(Input.KeyCode)
+                    elseif Input.UserInputType == Enum.UserInputType.MouseButton1
+                        or Input.UserInputType == Enum.UserInputType.MouseButton2
+                        or Input.UserInputType == Enum.UserInputType.MouseButton3 then
+                        Keybind:Set(Input.UserInputType)
+                    else
+                        return
+                    end
+
+                    InputBegan:Disconnect()
+                    InputBegan = nil
+                end)
+            end)
+
+            Items["KeyButton"]:Connect("MouseButton2Click", function()
+                local Index = TableFind(Modes, Keybind.ModeSelected) or 1
+                Keybind:SetMode(Modes[Index % #Modes + 1])
+            end)
+
+            Library:Connect(UserInputService.InputBegan, function(Input)
+                if Keybind.Picking or not Keybind.Key or Keybind.Value == "None" then
+                    return
+                end
+
+                if UserInputService:GetFocusedTextBox() then
+                    return
+                end
+
+                if tostring(Input.KeyCode) == Keybind.Key or tostring(Input.UserInputType) == Keybind.Key then
+                    Keybind:Press(true)
+                end
+            end)
+
+            Library:Connect(UserInputService.InputEnded, function(Input)
+                if Keybind.Picking or not Keybind.Key or Keybind.Value == "None" then
+                    return
+                end
+
+                if tostring(Input.KeyCode) == Keybind.Key or tostring(Input.UserInputType) == Keybind.Key then
+                    if Keybind.ModeSelected == "Hold" then
+                        Keybind:Press(false)
+                    end
+                end
+            end)
+
+            Keybind:Set({
+                Key = Data.Default,
+                Mode = Data.Mode or "Toggle"
+            })
+
+            Library.SetFlags[Keybind.Flag] = function(Value)
+                Keybind:Set(Value)
+            end
+
+            return Keybind, Items
         end
 
         Library.KeybindList = function(self, Title)
@@ -5072,6 +5278,36 @@ local Library do
                 Items["Toggle"].Instance.Visible = Bool 
             end
 
+            local GetSubElements = function()
+                if not Items["SubElements"] then
+                    Items["SubElements"] = Instances:Create("Frame", {
+                        Parent = Items["Toggle"].Instance,
+                        Name = "\0",
+                        BackgroundTransparency = 1,
+                        BorderSizePixel = 0,
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        AnchorPoint = Vector2New(1, 0.5),
+                        Position = UDim2New(1, 0, 0.5, 0),
+                        Size = UDim2New(0, 0, 1, 0),
+                        AutomaticSize = Enum.AutomaticSize.X,
+                        ZIndex = 2,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })
+
+                    Instances:Create("UIListLayout", {
+                        Parent = Items["SubElements"].Instance,
+                        Name = "\0",
+                        FillDirection = Enum.FillDirection.Horizontal,
+                        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                        VerticalAlignment = Enum.VerticalAlignment.Center,
+                        Padding = UDimNew(0, 6),
+                        SortOrder = Enum.SortOrder.LayoutOrder
+                    })
+                end
+
+                return Items["SubElements"]
+            end
+
             function Toggle:Colorpicker(Data)
                 Data = Data or { }
 
@@ -5087,7 +5323,7 @@ local Library do
                 }
 
                 local NewColorpicker, ColorpickerItems = Library:CreateColorpicker({
-                    Parent = Items["SubElements"],
+                    Parent = GetSubElements(),
                     Page = Colorpicker.Page,
                     Section = Colorpicker.Section,
                     Flag = Colorpicker.Flag,
@@ -5114,7 +5350,8 @@ local Library do
                 }
 
                 local NewKeybind, KeybindItems = Library:CreateKeybind({
-                    Parent = Items["SubElements"],
+                    Parent = GetSubElements(),
+                    Name = Data.Name or Data.name or Toggle.Name,
                     Page = Keybind.Page,
                     Section = Keybind.Section,
                     Flag = Keybind.Flag,
